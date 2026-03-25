@@ -1,0 +1,35 @@
+[build]
+  command = "npm install"
+  publish = "public"
+
+# Writable path for backup files on Netlify Functions (deploy disk is read-only).
+[context.production.environment]
+  BACKUPS_DIR = "/tmp/webhook-validator-backups"
+
+[context.deploy-preview.environment]
+  BACKUPS_DIR = "/tmp/webhook-validator-backups"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Route only API paths to the function so `public/` can still be served as static assets.
+[[redirects]]
+  from = "/webhook"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/webhook/*"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/files"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/files/*"
+  to = "/.netlify/functions/api"
+  status = 200
