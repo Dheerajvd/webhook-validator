@@ -8,11 +8,12 @@ function capture(req, res) {
 
 function list(req, res) {
   try {
-    const { from, to, limit } = req.query;
+    const { from, to, limit, search } = req.query;
     const filters = {};
     if (from != null && from !== "") filters.from = String(from);
     if (to != null && to !== "") filters.to = String(to);
     if (limit != null && limit !== "") filters.limit = limit;
+    if (search != null && search !== "") filters.search = String(search);
 
     const records = webhookStore.list(filters);
     return json(res, 200, { records, count: records.length });

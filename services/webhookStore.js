@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require("uuid");
+const { deepExactKeywordMatch } = require("../utils/deepKeywordMatch");
 
 /** @type {{ id: string; createdAt: string; webhookData: unknown }[]} */
 const store = [];
@@ -14,7 +15,7 @@ function create(webhookData) {
 }
 
 /**
- * @param {{ from?: string; to?: string; limit?: number }} filters
+ * @param {{ from?: string; to?: string; limit?: number; search?: string }} filters
  */
 function list(filters) {
   let rows = [...store];
@@ -33,6 +34,11 @@ function list(filters) {
       throw new Error("Invalid 'to' date");
     }
     rows = rows.filter((r) => Date.parse(r.createdAt) <= toMs);
+  }
+
+  if (filters.search != null && filters.search !== "") {
+    const keyword = String(filters.search);
+    rows = rows.filter((r) => deepExactKeywordMatch(r, keyword));
   }
 
   if (filters.limit != null) {
