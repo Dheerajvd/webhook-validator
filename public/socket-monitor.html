@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Webhook stream (Socket.IO)</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 1rem;
+        max-width: 56rem;
+      }
+      pre {
+        background: #f4f4f5;
+        padding: 0.75rem;
+        overflow: auto;
+        font-size: 0.8rem;
+        margin: 0 0 0.75rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .entry {
+        border-left: 3px solid #2563eb;
+        padding-left: 0.5rem;
+      }
+      .meta {
+        color: #71717a;
+        font-size: 0.75rem;
+        margin-bottom: 0.25rem;
+      }
+      .toolbar {
+        margin: 0.75rem 0;
+      }
+      .status {
+        margin-bottom: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Live webhooks</h1>
+    <p class="status" id="status">Connecting…</p>
+    <p>POST payloads to <code>/webhook</code>; each capture is emitted as Socket.IO event <code>webhook</code> with the full record.</p>
+    <div class="toolbar">
+      <button type="button" id="clear">Clear log</button>
+      <button type="button" id="pingBtn">Send app ping</button>
+      <span id="count">0 events</span>
+      <span id="pingOut"></span>
+    </div>
+    <h2>Log (newest first)</h2>
+    <div id="log"></div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const MAX = 50;
+      const statusEl = document.getElementById("status");
+      const logEl = document.getElementById("log");
+      const countEl = document.getElementById("count");
+      const clearBtn = document.getElementById("clear");
+      const pingBtn = document.getElementById("pingBtn");
+      const pingOut = document.getElementById("pingOut");
+      let n = 0;
+
+      function render(record) {
+        const wrap = document.createElement("div");
+        wrap.className = "entry";
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = new Date().toISOString() + " · " + (record.id || "?");
+        const pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(record, null, 2);
+        wrap.appendChild(meta);
+        wrap.appendChild(pre);
+        logEl.prepend(wrap);
+        while (logEl.children.length > MAX) {
+          logEl.removeChild(logEl.lastChild);
+        }
+        n += 1;
+        countEl.textContent = n + " events";
+      }
+
+      clearBtn.addEventListener("click", () => {
+        logEl.innerHTML = "";
+        n = 0;
+        countEl.textContent = "0 events";
+      });
+
+      const socket = io({ transports: ["websocket", "polling"] });
+
+      pingBtn.addEventListener("click", () => {
+        const t0 = performance.now();
+        socket.emit("ping", { clientT: Date.now() }, (pong) => {
+          const ms = Math.round(performance.now() - t0);
+          pingOut.textContent = " pong ack in ~" + ms + "ms · " + JSON.stringify(pong);
+        });
+      });
+      socket.on("connect", () => {
+        statusEl.textContent = "Connected (socket id: " + socket.id + ")";
+      });
+      socket.on("disconnect", (reason) => {
+        statusEl.textContent = "Disconnected: " + reason;
+      });
+      socket.on("connect_error", (err) => {
+        statusEl.textContent = "Connection error: " + err.message;
+      });
+      socket.on("webhook", render);
+      socket.on("pong", (pong) => {
+        pingOut.textContent = " pong event: " + JSON.stringify(pong);
+      });
+    </script>
+  </body>
+</html>
