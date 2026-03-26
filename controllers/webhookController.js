@@ -1,8 +1,10 @@
 const webhookStore = require("../services/webhookStore");
+const { emitWebhook } = require("../services/socketHub");
 const { json } = require("../utils/response");
 
 function capture(req, res) {
   const record = webhookStore.create(req.body);
+  emitWebhook(record);
   return json(res, 200, { record });
 }
 

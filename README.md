@@ -12,12 +12,19 @@ Small **Express** service that accepts webhook payloads, keeps them in **memory*
 npm install
 ```
 
-Optional: create a `.env` file in the project root:
+Optional: copy `.env.example` to `.env` in the project root and edit values (see README table for meanings):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | HTTP port | `3000` |
 | `BACKUPS_DIR` | Absolute path where backup JSON files are written | `./backups` (repo root) |
+| `SOCKETS_ENABLED` | If `true`, starts Socket.IO and allows Redis pub/sub; if `false`, neither runs | `true` |
+| `API_CORS_ORIGIN` | CORS for REST APIs (`*` or comma-separated origins) | `*` |
+| `SOCKET_CORS_ORIGIN` | CORS `origin` for Socket.IO (comma-separated list or `*`) | `*` |
+| `REDIS_URL` | Used only when **`SOCKETS_ENABLED=true`** — pub/sub for **`webhook`** across instances | (unset) |
+| `REDIS_WEBHOOK_CHANNEL` | Redis channel for webhook JSON | `webhook:events` |
+| `SOCKET_PING_INTERVAL_MS` | Engine.IO ping interval | `25000` |
+| `SOCKET_PING_TIMEOUT_MS` | Engine.IO ping timeout | `20000` |
 
 ## Run
 
@@ -32,6 +39,27 @@ npm run dev
 ```
 
 The server logs the listening URL on startup (for example `http://localhost:3000`).
+
+### WebSockets (local server only)
+
+When you run **`npm start`** / **`npm run dev`**, **Socket.IO** is attached to the same HTTP port. Each **`POST /webhook`** broadcasts the full stored record to every connected client:
+
+- **Event:** `webhook`
+- **Payload:** `{ id, createdAt, webhookData }` (same as the HTTP response body).
+
+**Browser demo:** open [`/socket-monitor.html`](http://localhost:3000/socket-monitor.html) while the server is running, then POST test payloads to `/webhook`.
+
+**Client example:**
+
+```js
+// Browser: <script src="/socket.io/socket.io.js"></script> then:
+const socket = io();
+socket.on("webhook", (record) => console.log(record));
+```
+
+This does **not** run on **Netlify** (no long-lived WebSocket server). Use a VPS, Railway, Render, Fly.io, etc., if you need live sockets in production.
+
+**Redis:** With **`SOCKETS_ENABLED=true`**, set **`REDIS_URL`** to fan out **`webhook`** Socket.IO events across multiple Node processes (see `services/redisPubSub.js`). **Application `ping` / `pong`** events are supported for latency checks; Engine.IO ping intervals are configurable via **`SOCKET_PING_INTERVAL_MS`** / **`SOCKET_PING_TIMEOUT_MS`**.
 
 ## Response shape
 
@@ -54,7 +82,7 @@ All JSON responses use:
 |--------|------|-------------|
 | `POST` | `/webhook` | Store the request body as `webhookData` with a new `id` (UUID) and `createdAt` (ISO 8601). |
 | `GET` | `/webhook` | List stored webhooks. |
-| `GET` | `/webhook?from=&to=&limit=` | Same as above with optional filters: `from` / `to` (ISO 8601, inclusive on `createdAt`), `limit` (positive integer, max rows after filtering). Omitting filters returns all records. |
+| `GET` | `/webhook?from=&to=&limit=&search=` | Optional filters: `from` / `to` (ISO 8601), `limit`, `search` (exact match on any nested **key** or **leaf value** in each record). Omit filters to return all. |
 | `GET` | `/webhook/:id` | One record by UUID, or **404** if missing. |
 | `POST` | `/webhook/flush` | Clear the in-memory store. |
 
@@ -143,6 +171,7 @@ Optional: set `NODE_VERSION` to `20` under **Build & deploy → Environment** if
 - **In-memory webhooks:** Serverless may run **multiple isolated instances**. The in-memory store is **not shared** and may **reset between requests**. Do not rely on “capture then list” across requests in production on Netlify; use backups or run the app on a **long-lived Node host** (Railway, Render, Fly.io, a VPS) if you need reliable memory state.
 - **Backup files:** With `BACKUPS_DIR` under `/tmp`, files can be **lost** on cold starts or when another instance runs. For durable storage you would need an external store (e.g. object storage or a database)—not included here.
 - **Timeouts:** Function execution time is limited by your Netlify plan (default is short; increase in **Functions** settings if needed).
+- **WebSockets / Socket.IO:** Not available on Netlify; use the Node server locally or a long-lived host.
 
 ## Project layout
 
@@ -156,12 +185,12 @@ netlify/
   functions/
     api.js       # Netlify serverless entry (wraps Express)
 routes/          # Route maps
-services/        # Store and backup file logic
-utils/           # JSON response helper
-public/          # Static files (published on Netlify)
-postman/         # Collection + environment
+services/        # Store, backup files, Socket.IO hub, Redis pub/sub
+utils/           # JSON response helper, deep search
+public/          # Static files (published on Netlify); `socket-monitor.html`
+postman/         # Collection + environment (if present)
 netlify.toml     # Netlify build + redirects
-server.js        # Local entry (HTTP server)
+server.js        # Local entry (HTTP + Socket.IO)
 ```
 
 ## Limitations
