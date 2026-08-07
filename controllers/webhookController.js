@@ -10,6 +10,17 @@ function capture(req, res) {
 
 function list(req, res) {
   try {
+    // Webhook verification logic
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    if (mode === "subscribe" && token === "ADVIBETECH2026") {
+      console.log("Webhook verified successfully.");
+      return res.status(200).send(challenge);
+    }
+
+    // Webhook listing logic
     const { from, to, limit, search } = req.query;
     const filters = {};
     if (from != null && from !== "") filters.from = String(from);
